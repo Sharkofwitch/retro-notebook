@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel
-from app.interpreter import eval_expr
+from app.interpreter import RetroInterpreter
 
 class NotebookCell(QWidget):
     def __init__(self):
@@ -21,8 +21,10 @@ class NotebookCell(QWidget):
         self.layout.addWidget(self.output)
 
         self.setLayout(self.layout)
+        self.interpreter = RetroInterpreter()
 
     def execute(self):
         code = self.input.toPlainText()
-        result = eval_expr(code)
-        self.output.setText(f"Result: {result}")
+        lines = code.splitlines()
+        results = [self.interpreter.run_line(line) for line in lines]
+        self.output.setText("\n".join(f"→ {r}" for r in results if r))
