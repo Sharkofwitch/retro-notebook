@@ -3,10 +3,14 @@ import json
 def save_notebook(cells, filename):
     data = []
     for cell in cells:
-        data.append({
-            "input": cell.input.toPlainText(),
-            "output": cell.output.text()
-        })
+        cell_type = cell.cell_type.currentText()
+        entry = {
+            "type": cell_type.lower(),
+            "input": cell.input.toPlainText()
+        }
+        if cell_type == "Code":
+            entry["output"] = cell.output.text()
+        data.append(entry)
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 

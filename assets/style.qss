@@ -1,29 +1,49 @@
 QWidget {
     background-color: #0d0d0d;  /* tiefschwarz */
     color: #33ff66;             /* phosphor-grün */
-    font-family: "Courier New", monospace;
-    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    letter-spacing: 1px;
 }
 
 QTextEdit, QLineEdit {
     background-color: #1a1a1a;
     color: #33ff66;
-    border: 1px solid #333;
-    padding: 5px;
+    border: 2px solid #33ff66;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
 }
 
 QPushButton {
     background-color: #262626;
-    border: 1px solid #33ff66;
-    padding: 5px;
+    border: 2px solid #33ff66;
+    padding: 8px 16px;
     color: #33ff66;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 
 QPushButton:hover {
     background-color: #333333;
+    color: #00ff99;
+    border: 2px solid #00ff99;
 }
 
 QLabel {
     background-color: transparent;
-    padding: 5px;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+}
+
+QComboBox {
+    background-color: #1a1a1a;
+    color: #33ff66;
+    border: 2px solid #33ff66;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
 }

@@ -15,6 +15,9 @@ FUNCTIONS = {
     "sqrt": math.sqrt,
     "sin": math.sin,
     "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "exp": math.exp,
 }
 
 CONSTANTS = {
@@ -49,9 +52,18 @@ class RetroInterpreter:
         self.for_lines = []
 
     def run_line(self, line):
-        line = line.strip()
+        # Falls Zeile mehrere Zeilen enthält, einzeln ausführen und Ausgaben mit Zeilenumbruch verbinden
+        if isinstance(line, str) and '\n' in line:
+            outputs = []
+            for subline in line.split('\n'):
+                out = self.run_line(subline)
+                if out:
+                    outputs.append(str(out))
+            return "\n".join(outputs)
 
-        if not line:
+        line = line.strip()
+        # Kommentare ignorieren
+        if not line or line.startswith('#'):
             return ""
 
         if self.in_for_block:

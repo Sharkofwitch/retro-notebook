@@ -1,0 +1,47 @@
+<VSCode.Cell language="markdown">
+# Beispiel-Workflow für retro-notebook
+Dieses Notebook demonstriert die wichtigsten Funktionen des retro-notebook.
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 1. Einfache Rechnung
+</VSCode.Cell>
+<VSCode.Cell language="python">
+2 + 2
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 2. Variablen und Konstanten
+</VSCode.Cell>
+<VSCode.Cell language="python">
+x = 5
+pi
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 3. Mathematische Funktionen
+</VSCode.Cell>
+<VSCode.Cell language="python">
+sqrt(16)
+sin(pi/2)
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 4. Eigene Funktionen definieren und nutzen
+</VSCode.Cell>
+<VSCode.Cell language="python">
+f(a) = a^2 + 1
+f(3)
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 4a. Weitere mathematische Funktionen
+</VSCode.Cell>
+<VSCode.Cell language="python">
+cos(0)
+tan(1)
+log(e)
+exp(2)
+3^4
+</VSCode.Cell>
+<VSCode.Cell language="markdown">
+## 5. Fehlerfall (z.B. Division durch 0)
+</VSCode.Cell>
+<VSCode.Cell language="python">
+1 / 0
+</VSCode.Cell>
