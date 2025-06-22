@@ -1,0 +1,29 @@
+QWidget {
+    background-color: #0d0d0d;  /* tiefschwarz */
+    color: #33ff66;             /* phosphor-grün */
+    font-family: "Courier New", monospace;
+    font-size: 14px;
+}
+
+QTextEdit, QLineEdit {
+    background-color: #1a1a1a;
+    color: #33ff66;
+    border: 1px solid #333;
+    padding: 5px;
+}
+
+QPushButton {
+    background-color: #262626;
+    border: 1px solid #33ff66;
+    padding: 5px;
+    color: #33ff66;
+}
+
+QPushButton:hover {
+    background-color: #333333;
+}
+
+QLabel {
+    background-color: transparent;
+    padding: 5px;
+}

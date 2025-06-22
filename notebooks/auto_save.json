@@ -1,0 +1,10 @@
+[
+  {
+    "input": "3 + 4",
+    "output": "Result: 7"
+  },
+  {
+    "input": "5 * 9",
+    "output": "Result: 45"
+  }
+]
