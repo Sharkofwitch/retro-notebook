@@ -1,30 +1,47 @@
-from PySide6.QtWidgets import QApplication, QWidget, QBoxLayout, QLineEdit, QPushButton, QLabel
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QScrollArea,
+    QPushButton, QFrame
+)
+from PySide6.QtCore import Qt
+from app.widgets.cell import NotebookCell
 import sys
 
 def start_app():
     app = QApplication(sys.argv)
-
     window = QWidget()
     window.setWindowTitle("Retro Notebook")
 
-    layout = QBoxLayout()
+    layout = QVBoxLayout()
 
-    input_field = QLineEdit()
-    layout.addWidget(input_field)
+    # Scroll-Bereich für die Zellen
+    scroll_area = QScrollArea()
+    scroll_area.setWidgetResizable(True)
 
-    run_button = QPushButton("Run")
-    layout.addWidget(run_button)
+    # Container-Widget im Scrollbereich
+    scroll_content = QFrame()
+    scroll_layout = QVBoxLayout()
+    scroll_content.setLayout(scroll_layout)
 
-    output_label = QLabel("")
-    layout.addWidget(output_label)
+    scroll_area.setWidget(scroll_content)
+    layout.addWidget(scroll_area)
 
-    def on_run():
-        text = input_field.text()
-        output_label.setText(f"Output: {text}")
+    # Liste von Zellen
+    cells = []
 
-    run_button.clicked.connect(on_run)
+    def add_cell():
+        cell = NotebookCell()
+        scroll_layout.addWidget(cell)
+        cells.append(cell)
+
+    # Erste Zelle automatisch hinzufügen
+    add_cell()
+
+    # Button für neue Zelle
+    new_cell_button = QPushButton("Neue Zelle")
+    new_cell_button.clicked.connect(add_cell)
+    layout.addWidget(new_cell_button)
 
     window.setLayout(layout)
+    window.resize(800, 600)
     window.show()
-
     sys.exit(app.exec())
