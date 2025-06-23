@@ -50,8 +50,27 @@ class RetroInterpreter:
         self.for_end = None
         self.for_step = 1
         self.for_lines = []
+        self.pending_input_var = None  # Für GUI-Input
+        self.last_input_result = None
+        self.in_frame_block = False
+        self.current_frame = []
+        self.frames = []
+        # Zusätzliche eingebaute Funktionen für Listen und Strings
+        self.builtin_functions = {
+            'len': len,
+            'str': str,
+            'int': int,
+            'float': float,
+            'list': list,
+            'ord': ord,
+            'chr': chr,
+        }
 
     def run_line(self, line):
+        # Falls auf Eingabe gewartet wird, keine weiteren Zeilen ausführen
+        if self.pending_input_var is not None:
+            return {"input_request": self.pending_input_var}
+
         # Falls Zeile mehrere Zeilen enthält, einzeln ausführen und Ausgaben mit Zeilenumbruch verbinden
         if isinstance(line, str) and '\n' in line:
             outputs = []
@@ -64,6 +83,44 @@ class RetroInterpreter:
         line = line.strip()
         # Kommentare ignorieren
         if not line or line.startswith('#'):
+            return ""
+
+        # Grafik-Frame-Befehle
+        if line.upper() == "BEGINFRAME":
+            self.in_frame_block = True
+            self.current_frame = []
+            return "[Begin Frame]"
+        if line.upper() == "ENDFRAME":
+            if self.in_frame_block:
+                self.in_frame_block = False
+                self.frames.append(self.current_frame)
+                return {"frame": self.current_frame}
+            else:
+                return "Error: ENDFRAME without BEGINFRAME"
+        # Grafikbefehle im Frame sammeln (ohne Rekursion!)
+        if self.in_frame_block:
+            cmd = line.upper().split()[0]
+            args = line[len(cmd):].strip().split(',')
+            try:
+                if cmd == "POINT" and len(args) == 2:
+                    x = float(self.eval_expr(args[0]))
+                    y = float(self.eval_expr(args[1]))
+                    self.current_frame.append({"type": "point", "x": x, "y": y})
+                elif cmd == "LINE" and len(args) == 4:
+                    x1 = float(self.eval_expr(args[0]))
+                    y1 = float(self.eval_expr(args[1]))
+                    x2 = float(self.eval_expr(args[2]))
+                    y2 = float(self.eval_expr(args[3]))
+                    self.current_frame.append({"type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2})
+                elif cmd == "CIRCLE" and len(args) == 3:
+                    x = float(self.eval_expr(args[0]))
+                    y = float(self.eval_expr(args[1]))
+                    r = float(self.eval_expr(args[2]))
+                    self.current_frame.append({"type": "circle", "x": x, "y": y, "r": r})
+                else:
+                    return f"Syntax Error in {cmd}"
+            except Exception as e:
+                return f"Error in {cmd}: {e}"
             return ""
 
         if self.in_for_block:
@@ -106,6 +163,9 @@ class RetroInterpreter:
         if line.upper() == "HELP":
             return self._handle_help()
 
+        if line.upper().startswith("INPUT "):
+            return self.handle_input(line[6:].strip())
+
         if line.upper().startswith("LET "):
             return self.handle_assignment(line[4:].strip())
 
@@ -121,14 +181,39 @@ class RetroInterpreter:
     def _handle_help(self):
         return (
             "Retro Notebook Help:\n"
-            "LET var = expr       - Assign value to variable\n"
-            "PRINT expr           - Evaluate and print expression\n"
-            "INPUT var            - Ask for user input (deaktiviert)\n"
-            "DEF f(x) = expr      - Define a function\n"
+            "LET var = expr             - Assign value to variable\n"
+            "LET arr = [1, 2, 3]        - Create a list/array\n"
+            "LET arr[index] = expr      - Assign value to array element\n"
+            "LET s = \"Hallo\"           - Create a string\n"
+            "LET s[index] = 'X'         - Replace character at index in string\n"
+            "PRINT expr                 - Evaluate and print expression\n"
+            "INPUT var                  - Ask for user input\n"
+            "DEF f(x) = expr            - Define a function\n"
             "IF cond THEN ... ELSE ... ENDIF - Conditional execution\n"
             "WHILE cond DO ... ENDWHILE      - While loop\n"
             "FOR i = a TO b [STEP s] ... NEXT - For loop\n"
-            "HELP                  - Show this help message"
+            "\n"
+            "# Graphics:\n"
+            "POINT x, y                 - Draw a point at (x, y)\n"
+            "LINE x1, y1, x2, y2        - Draw a line from (x1, y1) to (x2, y2)\n"
+            "CIRCLE x, y, r             - Draw a circle with center (x, y) and radius r\n"
+            "\n"
+            "# Built-in functions for lists/strings:\n"
+            "len(x)   - Length of list or string\n"
+            "str(x)   - Convert to string\n"
+            "int(x)   - Convert to integer\n"
+            "float(x) - Convert to float\n"
+            "list(x)  - Convert to list\n"
+            "ord(c)   - Unicode code of character\n"
+            "chr(n)   - Character from Unicode code\n"
+            "\n"
+            "# Notes:\n"
+            "- All graphics commands in a code block are shown together.\n"
+            "- WHILE/ENDWHILE and FOR/NEXT support blocks.\n"
+            "- Errors in loops or graphics abort execution.\n"
+            "- Max 1000 WHILE iterations (to prevent endless loops).\n"
+            "\n"
+            "HELP                        - Show this help message"
         )
 
     def _start_for_block(self, line):
@@ -177,20 +262,38 @@ class RetroInterpreter:
     def _run_while_block(self):
         self.in_while_block = False
         outputs = []
-
+        max_loops = 1000
+        loop_count = 0
+        last_i = None
         while True:
+            if loop_count >= max_loops:
+                outputs.append("Error: Maximum WHILE loop iterations (1000) exceeded. Possible endless loop.")
+                break
             condition_result = self.eval_expr(self.while_condition)
             if isinstance(condition_result, str) and condition_result.startswith("Error"):
-                return condition_result
+                outputs.append(condition_result)
+                break
             if not condition_result:
                 break
-
+            # Debug: Wert von i ausgeben, falls vorhanden
+            debug_i = self.env.get('i', None)
+            outputs.append(f"[DEBUG] i = {debug_i}")
             for line in self.while_lines:
                 out = self.run_line(line)
-                if out:
+                if isinstance(out, list):
+                    outputs.extend(out)
+                elif out:
                     outputs.append(out)
-
-        return "\n".join(outputs)
+                # Schleife abbrechen, wenn Fehler erkannt wird
+                if isinstance(out, str) and out.startswith("Error"):
+                    outputs.append("Aborting WHILE due to error.")
+                    return outputs
+            # Prüfe, ob sich i verändert hat
+            if debug_i == self.env.get('i', None):
+                outputs.append("Error: i did not change in this loop iteration. Possible endless loop.")
+                break
+            loop_count += 1
+        return outputs
 
     def _start_if_block(self, line):
         match = re.match(r"IF (.+?) THEN", line, re.IGNORECASE)
@@ -224,14 +327,38 @@ class RetroInterpreter:
 
     # Funktion zur Handhabung von Funktionsdefinitionen
     def handle_assignment(self, statement):
-        match = re.match(r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)", statement)
+        # Unterstützt jetzt auch arr[1] = ... und s[1] = ...
+        match = re.match(r"([a-zA-Z_][a-zA-Z0-9_]*)(\s*\[\s*(\d+)\s*\])?\s*=\s*(.+)", statement)
         if not match:
             return "Syntax Error in LET"
-
-        name, expr = match.groups()
+        name, _, idx, expr = match.groups()
         value = self.eval_expr(expr)
-        self.env[name] = value
-        return f"{name} = {value}"
+        if idx is not None:
+            container = self.env.get(name)
+            if isinstance(container, list):
+                try:
+                    container[int(idx)] = value
+                except Exception as e:
+                    return f"Error in list assignment: {e}"
+                return f"{name}[{idx}] = {value}"
+            elif isinstance(container, str):
+                try:
+                    i = int(idx)
+                    if not (0 <= i < len(container)):
+                        return f"Error: string index out of range"
+                    # Wert muss ein einzelnes Zeichen sein
+                    if not (isinstance(value, str) and len(value) == 1):
+                        return f"Error: can only assign a single character to string"
+                    new_str = container[:i] + value + container[i+1:]
+                    self.env[name] = new_str
+                    return f"{name}[{idx}] = '{value}'"
+                except Exception as e:
+                    return f"Error in string assignment: {e}"
+            else:
+                return f"Error: {name} is not a list or string"
+        else:
+            self.env[name] = value
+            return f"{name} = {value}"
 
     # Funktion zur Handhabung von PRINT-Anweisungen
     def handle_print(self, expr):
@@ -262,22 +389,172 @@ class RetroInterpreter:
 
         # Benutzerdefinierte Funktionen
         user_funcs = {}
-
         for name, (args, body) in self.functions.items():
             user_funcs[name] = make_user_function(self, args, body)
 
         try:
-            safe_globals = {**FUNCTIONS, **user_funcs, **self.env}
+            safe_globals = {**FUNCTIONS, **user_funcs, **self.env, **self.builtin_functions}
             return eval(expr, {"__builtins__": {}}, safe_globals)
         except Exception as e:
-            return f"Error: {e}"
-        
+            return f"Error in expression '{expr}': {type(e).__name__}: {e}"
+
     def eval_expr_with_scope(self, expr, local_vars):
         expr = expr.replace("^", "**")
         for const, val in CONSTANTS.items():
             expr = re.sub(rf"\b{re.escape(const)}\b", str(val), expr)
         try:
-            scope = {**FUNCTIONS, **self.env, **local_vars}
+            scope = {**FUNCTIONS, **self.env, **local_vars, **self.builtin_functions}
             return eval(expr, {"__builtins__": {}}, scope)
         except Exception as e:
-            return f"Error in func: {e}"
+            return f"Error in function expression '{expr}': {type(e).__name__}: {e}"
+    
+    def handle_input(self, varname):
+        varname = varname.strip()
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", varname):
+            return "Syntax Error in INPUT"
+        self.pending_input_var = varname
+        return {"input_request": varname}
+
+    def provide_input(self, value):
+        # Setzt den Wert für die zuletzt angeforderte Eingabevariable
+        if self.pending_input_var is None:
+            return "No input requested."
+        varname = self.pending_input_var
+        # Versuche, die Eingabe als Zahl zu interpretieren, sonst als String
+        try:
+            val = float(value) if '.' in str(value) or 'e' in str(value).lower() else int(value)
+        except Exception:
+            val = value
+        self.env[varname] = val
+        self.pending_input_var = None
+        self.last_input_result = val
+        return f"{varname} = {val}"
+
+    def run_block(self, lines):
+        outputs = []
+        graphics = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            line = lines[i].strip()
+            if not line or line.startswith('#'):
+                i += 1
+                continue
+            # WHILE-Block erkennen
+            if line.upper().startswith('WHILE '):
+                cond_line = line
+                block = []
+                i += 1
+                depth = 1
+                while i < n and depth > 0:
+                    l = lines[i].strip()
+                    if l.upper().startswith('WHILE '):
+                        depth += 1
+                    elif l.upper() == 'ENDWHILE':
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    block.append(lines[i])
+                    i += 1
+                # Schleife ausführen, max. 1000 Durchläufe
+                loop_count = 0
+                while True:
+                    if loop_count > 1000:
+                        outputs.append('Error: Max WHILE iterations reached')
+                        break
+                    cond = self.eval_expr(cond_line[6:-2].strip())  # WHILE ... DO
+                    if isinstance(cond, str) and cond.startswith('Error'):
+                        outputs.append(cond)
+                        break
+                    if not cond:
+                        break
+                    # Block ausführen
+                    for bline in block:
+                        out = self.run_line(bline)
+                        if isinstance(out, dict) and 'draw' in out:
+                            graphics.append(out['draw'])
+                        elif out:
+                            outputs.append(out)
+                        if isinstance(out, str) and out.startswith('Error'):
+                            outputs.append('Aborting WHILE due to error.')
+                            break
+                    loop_count += 1
+                i += 1  # nach ENDWHILE
+                continue
+            # Grafikbefehle
+            if line.upper().startswith('POINT ') or line.upper().startswith('LINE ') or line.upper().startswith('CIRCLE '):
+                out = self.run_line(line)
+                if isinstance(out, dict) and 'draw' in out:
+                    graphics.append(out['draw'])
+                elif out:
+                    outputs.append(out)
+                i += 1
+                continue
+            # Normale Zeile
+            out = self.run_line(line)
+            if out:
+                outputs.append(out)
+            i += 1
+        if graphics:
+            outputs.append({'graphics': graphics})
+        return outputs
+
+    def run_line(self, line):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            return ''
+        if line.upper().startswith('LET '):
+            return self.handle_assignment(line[4:].strip())
+        if line.upper().startswith('PRINT '):
+            return self.handle_print(line[6:].strip())
+        if line.upper().startswith('DEF '):
+            return self.handle_function_def(line[4:].strip())
+        if line.upper().startswith('INPUT '):
+            return self.handle_input(line[6:].strip())
+        if line.upper().startswith('POINT '):
+            return self.handle_graphic('POINT', line[6:])
+        if line.upper().startswith('LINE '):
+            return self.handle_graphic('LINE', line[5:])
+        if line.upper().startswith('CIRCLE '):
+            return self.handle_graphic('CIRCLE', line[7:])
+        return self.eval_expr(line)
+
+    def handle_graphic(self, cmd, argstr):
+        args = self.split_args(argstr)
+        try:
+            if cmd == 'POINT' and len(args) == 2:
+                x = float(self.eval_expr(args[0]))
+                y = float(self.eval_expr(args[1]))
+                return {"draw": {"type": "point", "x": x, "y": y}}
+            if cmd == 'LINE' and len(args) == 4:
+                x1 = float(self.eval_expr(args[0]))
+                y1 = float(self.eval_expr(args[1]))
+                x2 = float(self.eval_expr(args[2]))
+                y2 = float(self.eval_expr(args[3]))
+                return {"draw": {"type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2}}
+            if cmd == 'CIRCLE' and len(args) == 3:
+                x = float(self.eval_expr(args[0]))
+                y = float(self.eval_expr(args[1]))
+                r = float(self.eval_expr(args[2]))
+                return {"draw": {"type": "circle", "x": x, "y": y, "r": r}}
+            return f"Syntax Error in {cmd}: wrong number of arguments"
+        except Exception as e:
+            return f"Error in {cmd}: {e}"
+
+    def split_args(self, argstr):
+        args = []
+        current = ''
+        depth = 0
+        for c in argstr:
+            if c == ',' and depth == 0:
+                args.append(current.strip())
+                current = ''
+            else:
+                if c in '([':
+                    depth += 1
+                elif c in ')]':
+                    depth -= 1
+                current += c
+        if current.strip():
+            args.append(current.strip())
+        return args
