@@ -3,11 +3,17 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QLabel, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtMultimedia import QSoundEffect
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from app.widgets.cell import NotebookCell
 from app.storage import save_notebook, load_notebook
 import sys
 import os
+
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 
 def show_loading_screen(app, window, on_finish):
@@ -22,12 +28,14 @@ def show_loading_screen(app, window, on_finish):
     loading.resize(500, 300)
     loading.show()
 
-    # Soundeffekt für Startscreen
-    sound = QSoundEffect()
-    start_path = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "start.wav")
-    sound.setSource(f"file://{os.path.abspath(start_path)}")
-    sound.setVolume(1.25)
-    sound.play()
+    # Soundeffekt für Startscreen mit QMediaPlayer
+    loading.player = QMediaPlayer()
+    loading.audio_output = QAudioOutput()
+    loading.player.setAudioOutput(loading.audio_output)
+    start_path = resource_path("assets/start.mp3")
+    loading.player.setSource(f"file://{os.path.abspath(start_path)}")
+    loading.audio_output.setVolume(0.25)
+    loading.player.play()
 
     # Blinker für Cursor
     def blink():
@@ -45,14 +53,14 @@ def show_loading_screen(app, window, on_finish):
         loading.close()
         on_finish()
 
-    QTimer.singleShot(1800, finish)
+    QTimer.singleShot(3000, finish)
 
 
 def start_app():
     app = QApplication(sys.argv)
 
     # Retro-Style laden
-    with open("assets/style.qss", "r") as f:
+    with open(resource_path("assets/style.qss"), "r") as f:
         app.setStyleSheet(f.read())
 
     window = QWidget()

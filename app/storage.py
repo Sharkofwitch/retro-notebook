@@ -1,4 +1,11 @@
 import json
+import os
+
+def get_notebook_path(filename):
+    home = os.path.expanduser("~")
+    nb_dir = os.path.join(home, "retro-notebook-notebooks")
+    os.makedirs(nb_dir, exist_ok=True)
+    return os.path.join(nb_dir, filename)
 
 def save_notebook(cells, filename):
     data = []
@@ -11,9 +18,11 @@ def save_notebook(cells, filename):
         if cell_type == "Code":
             entry["output"] = cell.output.text()
         data.append(entry)
-    with open(filename, "w", encoding="utf-8") as f:
+    path = get_notebook_path(filename)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 def load_notebook(filename):
-    with open(filename, "r", encoding="utf-8") as f:
+    path = get_notebook_path(filename)
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)  # gibt eine Liste von Zellen zurück

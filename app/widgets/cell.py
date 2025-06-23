@@ -1,9 +1,15 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel, QComboBox
 from PySide6.QtCore import Qt
-from PySide6.QtMultimedia import QSoundEffect
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from app.interpreter import RetroInterpreter
 import markdown2
 import os
+import sys
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 class NotebookCell(QWidget):
     def __init__(self, cell_type="Code"):
@@ -34,13 +40,16 @@ class NotebookCell(QWidget):
         self.interpreter = RetroInterpreter()
 
         # Soundeffekt vorbereiten
-        self.sound = QSoundEffect()
-        beep_path = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "beep.wav")
-        self.sound.setSource(f"file://{os.path.abspath(beep_path)}")
-        self.sound.setVolume(0.25)
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
+        beep_path = resource_path("assets/beep.wav")
+        self.player.setSource(f"file://{os.path.abspath(beep_path)}")
+        self.audio_output.setVolume(0.25)
 
     def execute(self):
-        self.sound.play()
+        self.player.stop()  # Falls noch ein Sound läuft
+        self.player.play()
         if self.cell_type.currentText() == "Markdown":
             md = self.input.toPlainText()
             html = markdown2.markdown(md)
