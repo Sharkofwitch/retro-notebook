@@ -1,19 +1,24 @@
 # retro-notebook
 
-Ein retro-inspiriertes Desktop-Notebook für Code, Mathematik und Lernen.
+Ein modernes, retro-inspiriertes Desktop-Notebook für Code, Mathematik, Logik und Minigames.
 
 ## Features
-- Retro-Optik (schwarz/grün, Pixel-Look, ASCII-Design)
-- Zellen für Code und Markdown
+- Hochwertige Retro-Optik (CRT-Look, Scanlines, Glow, animierte Pixel, Retro-Icons)
+- Zellen für Code (eigener Interpreter) und Markdown
 - Eigener Interpreter für mathematische Ausdrücke, Variablen, Listen, Strings, Funktionen, Bedingungen, Schleifen
 - Grafikbefehle: Punkte, Linien, Kreise (z.B. zum Plotten von Daten)
 - Soundeffekte beim Ausführen und Starten
-- About-Fenster im Retro-Stil
 - Notebook speichern und laden (JSON)
 - Fehlerabfang und Endlosschleifen-Schutz
+- Minigames: **CodeGrid** (Logikpuzzle, mehrere Spielmodi, Daily Challenge, XP, Highscore, Achievements, Seed-System), **Bit Factory** (Survival Builder)
+- Fortschrittssystem: XP, Highscore, Achievements, Daily Challenge
+- Animierte, atmosphärische Startseite und Menüs im Retro-Stil
+- About-Fenster im Retro-Stil
+- Drag & Drop für Zellen
+- Mac-kompatibel: Ressourcen-Handling für App-Bundle vorbereitet
 - Beispiel-Workflow im Ordner `docs/notebooks/`
 
-## Installation
+## Installation & Start
 1. Python 3.10+ installieren
 2. Abhängigkeiten installieren:
    ```bash
@@ -23,6 +28,11 @@ Ein retro-inspiriertes Desktop-Notebook für Code, Mathematik und Lernen.
    ```bash
    python run.py
    ```
+
+### Als macOS-App (Bundle)
+- Die App ist vorbereitet für PyInstaller, py2app oder Briefcase.
+- Alle Ressourcen werden über `resource_path` geladen (funktioniert im Bundle und im Dev-Modus).
+- Für ein App-Bundle: Siehe Beispiel-Specfile oder py2app-Setup (nicht im Repo enthalten).
 
 ## Sprache & Beispiele
 - Variablen und Listen:
@@ -39,6 +49,11 @@ Ein retro-inspiriertes Desktop-Notebook für Code, Mathematik und Lernen.
       PRINT i
       LET i = i + 1
   ENDWHILE
+  IF x > 3 THEN
+      PRINT "x ist groß"
+  ELSE
+      PRINT "x ist klein"
+  ENDIF
   ```
 - Grafikbefehle (alle in einem Block werden gemeinsam angezeigt):
   ```
@@ -54,21 +69,23 @@ Ein retro-inspiriertes Desktop-Notebook für Code, Mathematik und Lernen.
   ENDWHILE
   ```
 - Eingebaute Funktionen: `len`, `str`, `int`, `float`, `list`, `ord`, `chr`, `sqrt`, `sin`, `cos`, `tan`, `log`, `exp`
+- Minigames: Im Hauptmenü auswählbar, Fortschritt wird gespeichert.
 
 ## Hinweise
 - Alle Grafikbefehle in einer Codezelle werden als ein Bild angezeigt.
-- WHILE/ENDWHILE und FOR/NEXT unterstützen Blöcke.
+- WHILE/ENDWHILE, FOR/NEXT und IF/ELSE/ENDIF unterstützen Blöcke.
 - Fehler in Schleifen oder Grafikbefehlen brechen die Ausführung ab.
 - Maximal 1000 WHILE-Durchläufe (Schutz vor Endlosschleifen).
+- Ressourcen werden immer über `resource_path` geladen (auch im App-Bundle).
 
 ## To-Do / Ideen
 - Export als HTML/PDF
-- Drag & Drop für Zellen
-- Undo/Redo
+- Undo/Redo für Zellen
 - Farbschema-Auswahl (verschiedene Retro-Themes)
 - Virtuelle Statusleiste/LED
-- Animationen und WAIT-Befehl
-- Easter Eggs (z.B. Minispiel)
+- Noch mehr Animationen und Retro-Effekte
+- Weitere Minigames und Easter Eggs
+- Bessere macOS-Integration (Dock-Icon, Info.plist, App-Icon)
 
 ---
 

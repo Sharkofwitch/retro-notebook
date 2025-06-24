@@ -1,6 +1,7 @@
 import math
 import operator
 import re
+import time
 
 # Unterstützte Operatoren für Berechnungen
 OPS = {
@@ -85,18 +86,6 @@ class RetroInterpreter:
         if not line or line.startswith('#'):
             return ""
 
-        # Grafik-Frame-Befehle
-        if line.upper() == "BEGINFRAME":
-            self.in_frame_block = True
-            self.current_frame = []
-            return "[Begin Frame]"
-        if line.upper() == "ENDFRAME":
-            if self.in_frame_block:
-                self.in_frame_block = False
-                self.frames.append(self.current_frame)
-                return {"frame": self.current_frame}
-            else:
-                return "Error: ENDFRAME without BEGINFRAME"
         # Grafikbefehle im Frame sammeln (ohne Rekursion!)
         if self.in_frame_block:
             cmd = line.upper().split()[0]
@@ -498,63 +487,3 @@ class RetroInterpreter:
         if graphics:
             outputs.append({'graphics': graphics})
         return outputs
-
-    def run_line(self, line):
-        line = line.strip()
-        if not line or line.startswith('#'):
-            return ''
-        if line.upper().startswith('LET '):
-            return self.handle_assignment(line[4:].strip())
-        if line.upper().startswith('PRINT '):
-            return self.handle_print(line[6:].strip())
-        if line.upper().startswith('DEF '):
-            return self.handle_function_def(line[4:].strip())
-        if line.upper().startswith('INPUT '):
-            return self.handle_input(line[6:].strip())
-        if line.upper().startswith('POINT '):
-            return self.handle_graphic('POINT', line[6:])
-        if line.upper().startswith('LINE '):
-            return self.handle_graphic('LINE', line[5:])
-        if line.upper().startswith('CIRCLE '):
-            return self.handle_graphic('CIRCLE', line[7:])
-        return self.eval_expr(line)
-
-    def handle_graphic(self, cmd, argstr):
-        args = self.split_args(argstr)
-        try:
-            if cmd == 'POINT' and len(args) == 2:
-                x = float(self.eval_expr(args[0]))
-                y = float(self.eval_expr(args[1]))
-                return {"draw": {"type": "point", "x": x, "y": y}}
-            if cmd == 'LINE' and len(args) == 4:
-                x1 = float(self.eval_expr(args[0]))
-                y1 = float(self.eval_expr(args[1]))
-                x2 = float(self.eval_expr(args[2]))
-                y2 = float(self.eval_expr(args[3]))
-                return {"draw": {"type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2}}
-            if cmd == 'CIRCLE' and len(args) == 3:
-                x = float(self.eval_expr(args[0]))
-                y = float(self.eval_expr(args[1]))
-                r = float(self.eval_expr(args[2]))
-                return {"draw": {"type": "circle", "x": x, "y": y, "r": r}}
-            return f"Syntax Error in {cmd}: wrong number of arguments"
-        except Exception as e:
-            return f"Error in {cmd}: {e}"
-
-    def split_args(self, argstr):
-        args = []
-        current = ''
-        depth = 0
-        for c in argstr:
-            if c == ',' and depth == 0:
-                args.append(current.strip())
-                current = ''
-            else:
-                if c in '([':
-                    depth += 1
-                elif c in ')]':
-                    depth -= 1
-                current += c
-        if current.strip():
-            args.append(current.strip())
-        return args

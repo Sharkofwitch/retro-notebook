@@ -47,3 +47,22 @@ QComboBox {
     font-family: 'Courier New', monospace;
     font-size: 18px;
 }
+
+QWidget[dragged="true"] {
+    background-color: #222;
+    border: 2px solid #33ff66;
+    outline: 2px solid #00ff99;
+}
+
+QLabel[objectName="drag_handle"] {
+    color: #888;
+    font-size: 22px;
+    padding: 0 4px;
+    background: transparent;
+}
+
+QLabel[objectName="drag_handle"]:hover {
+    color: #33ff66;
+    background: #222;
+    border-radius: 4px;
+}
