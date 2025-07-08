@@ -316,7 +316,7 @@ def start_app():
             msg.setText(
                 """
 <pre style='color:#33ff66; background:#0d0d0d; font-family:Courier New,monospace;'>
-RETRO NOTEBOOK v1.1
+RETRO NOTEBOOK v1.2
 (c) 2025 by Jakob Szarkowicz
 
 A retro-inspired notebook for code, math & learning.
@@ -332,6 +332,15 @@ This project is licensed under the MIT License.
             msg.exec()
         about_button.clicked.connect(show_about)
         layout.addWidget(about_button)
+
+        # Zurück-zum-Menü-Button
+        back_button = QPushButton("Zurück zum Hauptmenü")
+        back_button.setStyleSheet('font-size:18px; background:#222; color:#ffe066; border:2px solid #ffe066; border-radius:8px; padding:8px 24px;')
+        def go_home():
+            window.close()
+            show_homepage(app, window, show_main)
+        back_button.clicked.connect(go_home)
+        layout.addWidget(back_button)
 
         # Statusleiste/LED unten hinzufügen
         status_layout = QHBoxLayout()
@@ -481,6 +490,5 @@ This project is licensed under the MIT License.
 
     def show_home():
         show_homepage(app, window, show_main)
-
     show_loading_screen(app, window, show_home)
     sys.exit(app.exec())

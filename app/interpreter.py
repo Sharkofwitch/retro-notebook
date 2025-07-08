@@ -422,8 +422,10 @@ class RetroInterpreter:
     def run_block(self, lines):
         outputs = []
         graphics = []
-        i = 0
         n = len(lines)
+        i = 0
+        # Temporär: Grafikbefehle immer sammeln
+        collect_graphics = True
         while i < n:
             line = lines[i].strip()
             if not line or line.startswith('#'):
@@ -459,10 +461,14 @@ class RetroInterpreter:
                         break
                     # Block ausführen
                     for bline in block:
+                        # Grafikbefehle erkennen und sammeln
+                        bline_stripped = bline.strip().upper()
+                        if collect_graphics and (bline_stripped.startswith('POINT ') or bline_stripped.startswith('LINE ') or bline_stripped.startswith('CIRCLE ')):
+                            gobj = self._parse_graphics_command(bline)
+                            if gobj:
+                                graphics.append(gobj)
                         out = self.run_line(bline)
-                        if isinstance(out, dict) and 'draw' in out:
-                            graphics.append(out['draw'])
-                        elif out:
+                        if out and not (isinstance(out, dict) and 'graphics' in out):
                             outputs.append(out)
                         if isinstance(out, str) and out.startswith('Error'):
                             outputs.append('Aborting WHILE due to error.')
@@ -470,13 +476,17 @@ class RetroInterpreter:
                     loop_count += 1
                 i += 1  # nach ENDWHILE
                 continue
-            # Grafikbefehle
-            if line.upper().startswith('POINT ') or line.upper().startswith('LINE ') or line.upper().startswith('CIRCLE '):
+            # Grafikbefehle erkennen und sammeln
+            line_upper = line.upper()
+            if collect_graphics and (line_upper.startswith('POINT ') or line_upper.startswith('LINE ') or line_upper.startswith('CIRCLE ')):
+                gobj = self._parse_graphics_command(line)
+                if gobj:
+                    graphics.append(gobj)
                 out = self.run_line(line)
-                if isinstance(out, dict) and 'draw' in out:
-                    graphics.append(out['draw'])
-                elif out:
-                    outputs.append(out)
+                # Fehler- oder leere Ausgaben von Grafikbefehlen NICHT anzeigen
+                if out and not (isinstance(out, dict) and 'graphics' in out):
+                    if not (isinstance(out, str) and (out.strip() == '' or out.startswith('Syntax Error in') or out.startswith('Error in'))):
+                        outputs.append(out)
                 i += 1
                 continue
             # Normale Zeile
@@ -487,3 +497,27 @@ class RetroInterpreter:
         if graphics:
             outputs.append({'graphics': graphics})
         return outputs
+
+    def _parse_graphics_command(self, line):
+        """Hilfsfunktion: Parsen und Auswerten eines Grafikbefehls (POINT, LINE, CIRCLE). Gibt dict zurück oder None bei Fehler."""
+        try:
+            cmd = line.strip().upper().split()[0]
+            args = line.strip()[len(cmd):].strip().split(',')
+            if cmd == "POINT" and len(args) == 2:
+                x = float(self.eval_expr(args[0]))
+                y = float(self.eval_expr(args[1]))
+                return {"type": "point", "x": x, "y": y}
+            elif cmd == "LINE" and len(args) == 4:
+                x1 = float(self.eval_expr(args[0]))
+                y1 = float(self.eval_expr(args[1]))
+                x2 = float(self.eval_expr(args[2]))
+                y2 = float(self.eval_expr(args[3]))
+                return {"type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2}
+            elif cmd == "CIRCLE" and len(args) == 3:
+                x = float(self.eval_expr(args[0]))
+                y = float(self.eval_expr(args[1]))
+                r = float(self.eval_expr(args[2]))
+                return {"type": "circle", "x": x, "y": y, "r": r}
+        except Exception:
+            return None
+        return None

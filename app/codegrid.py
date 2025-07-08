@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QWidget, QSizePolicy, QMessageBox, QInputDialog
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPainter, QColor, QFont
+from PySide6.QtGui import QPainter, QColor, QFont, QPen, QBrush
 import random, copy, json, os
 
 CODEGRID_SAVE_PATH = os.path.join(os.path.dirname(__file__), '../notebooks/codegrid_save.json')
@@ -32,13 +32,72 @@ class CodeGridMinimal(QDialog):
         return {'size': size, 'moves': moves, 'seed': h % 100000}
 
     def init_ui(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtGui import QPainter, QPen, QColor
         vbox = QVBoxLayout()
         vbox.setContentsMargins(32, 32, 32, 32)
+        # Menü-Button oben rechts
+        menu_hbox = QHBoxLayout()
+        menu_hbox.addStretch()
+        self.back_btn = QPushButton("Zurück zum Hauptmenü")
+        self.back_btn.setStyleSheet('font-size:16px; background:#222; color:#ffe066; border:2px solid #ffe066; border-radius:8px; padding:6px 18px;')
+        self.back_btn.clicked.connect(self.close)
+        menu_hbox.addWidget(self.back_btn)
+        vbox.addLayout(menu_hbox)
+        # Status
         self.status_label = QLabel()
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.status_label.setStyleSheet('font-size:22px; color:#33ff66;')
         vbox.addWidget(self.status_label)
         vbox.addSpacing(12)
+        # Animierter Rahmen/Scanlines
+        class AnimatedFrame(QWidget):
+            def __init__(self, grid_size, cell_size, parent=None):
+                super().__init__(parent)
+                self.setMinimumHeight(2*(grid_size*cell_size+64))
+                self.grid_size = grid_size
+                self.cell_size = cell_size
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(self.update)
+                self.timer.start(50)
+                self.phase = 0
+            def paintEvent(self, event):
+                qp = QPainter(self)
+                qp.setRenderHint(QPainter.RenderHint.Antialiasing)
+                # Glow-Rahmen
+                for i in range(1, 6):
+                    qp.setPen(QPen(QColor(51,255,102, 22//i), 8+2*i))
+                    qp.drawRoundedRect(8-i*2, 8-i*2, self.width()-16+i*4, self.height()-16+i*4, 18+i*2, 18+i*2)
+                # Spielfeld-Hintergrund besonders hervorheben
+                grid_w = self.grid_size*self.cell_size
+                grid_h = self.grid_size*self.cell_size
+                grid_x = (self.width()-grid_w)//2
+                grid_y = (self.height()-grid_h)//2
+                qp.setBrush(QColor('#222'))
+                qp.setPen(QPen(QColor('#ffe066'), 4))
+                qp.drawRoundedRect(grid_x-12, grid_y-12, grid_w+24, grid_h+24, 18, 18)
+                qp.setBrush(QColor('#181c1b'))
+                qp.setPen(QPen(QColor('#33ff66'), 3))
+                qp.drawRoundedRect(8, 8, self.width()-16, self.height()-16, 18, 18)
+                # Scanlines
+                for y in range(16, self.height()-16, 4):
+                    y_off = y + (self.phase % 8)
+                    color = QColor(30,30,30,80)
+                    if y%16==0:
+                        color = QColor('#33ff66') if (y//16)%2==0 else QColor('#ffe066')
+                        color.setAlpha(60)
+                    qp.setPen(QPen(color, 2))
+                    qp.drawLine(16, y_off, self.width()-16, y_off)
+                # Glitch-Overlay (subtil)
+                if self.phase%23==0:
+                    qp.setOpacity(0.13)
+                    qp.setBrush(QColor('#ff33cc'))
+                    qp.drawRect(8, 8, self.width()-16, self.height()-16)
+                    qp.setOpacity(1.0)
+                self.phase += 1
+        frame = AnimatedFrame(self.grid_size, self.cell_size, self)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(32, 32, 32, 32)
         hbox_grids = QHBoxLayout()
         self.grid_widget = GridWidget(self)
         self.target_widget = TargetGridWidget(self)
@@ -47,7 +106,8 @@ class CodeGridMinimal(QDialog):
         hbox_grids.addSpacing(32)
         hbox_grids.addWidget(self.target_widget)
         hbox_grids.addStretch(1)
-        vbox.addLayout(hbox_grids)
+        frame_layout.addLayout(hbox_grids)
+        vbox.addWidget(frame)
         vbox.addSpacing(12)
         # Steuerung mit Labels
         hbox = QHBoxLayout()
@@ -75,6 +135,20 @@ class CodeGridMinimal(QDialog):
         self.daily_btn.clicked.connect(self.show_daily_challenge)
         hbox.addWidget(self.daily_btn)
         vbox.addLayout(hbox)
+        # Animierte Buttons (Flicker)
+        def btn_flicker(btn, base_color):
+            c = QColor(base_color)
+            c = c.lighter(random.randint(90,120))
+            btn.setStyleSheet(f"font-size:20px; min-width:60px; background:#181c1b; color:{c.name()}; border:2px solid {c.name()}; border-radius:8px; padding:6px 18px;")
+        btns = [self.exec_btn, self.undo_btn, self.daily_btn, self.back_btn]
+        btn_timer = QTimer(self)
+        def update_btns():
+            btn_flicker(self.exec_btn, '#33ff66')
+            btn_flicker(self.undo_btn, '#ffe066')
+            btn_flicker(self.daily_btn, '#ff33cc')
+            btn_flicker(self.back_btn, '#ffe066')
+        btn_timer.timeout.connect(update_btns)
+        btn_timer.start(180)
         # Hilfetext
         self.setLayout(vbox)
         self.exec_btn.clicked.connect(self.execute_command)
@@ -374,17 +448,39 @@ class GridWidget(QWidget):
         grid_size = self.game.grid_size
         cell_size = self.game.cell_size
         locked = getattr(self.game, 'locked', set())
+        # Hintergrund für das gesamte Grid
+        qp.setBrush(QColor('#111'))
+        qp.setPen(QPen(Qt.PenStyle.NoPen))
+        qp.drawRect(32, 32, grid_size*cell_size, grid_size*cell_size)
         for y in range(grid_size):
             for x in range(grid_size):
                 val = self.game.board[y][x]
+                rect = (32+x*cell_size, 32+y*cell_size, cell_size, cell_size)
                 if (x, y) in locked:
                     qp.setPen(QColor('#ff3366'))
                     qp.setBrush(QColor(60,0,0,180))
-                    qp.drawRect(32+x*cell_size, 32+y*cell_size, cell_size, cell_size)
-                qp.setPen(QColor('#33ff66') if val else QColor('#222'))
+                    qp.drawRect(*rect)
+                elif not val:
+                    # Leere Felder klar hervorheben
+                    qp.setPen(QColor('#222'))
+                    qp.setBrush(QColor('#222'))
+                    qp.drawRect(*rect)
+                else:
+                    qp.setPen(QColor('#33ff66'))
+                    qp.setBrush(QColor('#33ff66'))
+                    qp.drawRect(*rect)
+                # Text/Icon
+                qp.setPen(QColor('#0d0d0d') if val else QColor('#888'))
                 qp.setFont(QFont('Courier New', 36, QFont.Weight.Bold))
-                qp.drawText(32+x*cell_size, 32+y*cell_size+40, '█' if val else '░')
+                qp.drawText(rect[0], rect[1]+40, '█' if val else '·')
+        # Gitterlinien
+        qp.setPen(QColor('#222'))
+        for i in range(grid_size+1):
+            qp.drawLine(32, 32+i*cell_size, 32+grid_size*cell_size, 32+i*cell_size)
+            qp.drawLine(32+i*cell_size, 32, 32+i*cell_size, 32+grid_size*cell_size)
+        # Rahmen
         qp.setPen(QColor('#33ff66'))
+        qp.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         qp.drawRect(30, 30, grid_size*cell_size+4, grid_size*cell_size+4)
 
 class TargetGridWidget(QWidget):
@@ -397,13 +493,33 @@ class TargetGridWidget(QWidget):
         qp = QPainter(self)
         grid_size = self.game.grid_size
         cell_size = self.game.cell_size
+        # Hintergrund für das gesamte Grid
+        qp.setBrush(QColor('#111'))
+        qp.setPen(QPen(Qt.PenStyle.NoPen))
+        qp.drawRect(32, 32, grid_size*cell_size, grid_size*cell_size)
         for y in range(grid_size):
             for x in range(grid_size):
                 val = self.game.target[y][x]
-                qp.setPen(QColor('#ffe066') if val else QColor('#222'))
+                rect = (32+x*cell_size, 32+y*cell_size, cell_size, cell_size)
+                if val:
+                    qp.setPen(QColor('#ffe066'))
+                    qp.setBrush(QColor('#ffe066'))
+                    qp.drawRect(*rect)
+                else:
+                    qp.setPen(QColor('#222'))
+                    qp.setBrush(QColor('#222'))
+                    qp.drawRect(*rect)
+                qp.setPen(QColor('#0d0d0d') if val else QColor('#888'))
                 qp.setFont(QFont('Courier New', 36, QFont.Weight.Bold))
-                qp.drawText(32+x*cell_size, 32+y*cell_size+40, '█' if val else '░')
+                qp.drawText(rect[0], rect[1]+40, '█' if val else '·')
+        # Gitterlinien
+        qp.setPen(QColor('#222'))
+        for i in range(grid_size+1):
+            qp.drawLine(32, 32+i*cell_size, 32+grid_size*cell_size, 32+i*cell_size)
+            qp.drawLine(32+i*cell_size, 32, 32+i*cell_size, 32+grid_size*cell_size)
+        # Rahmen
         qp.setPen(QColor('#ffe066'))
+        qp.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         qp.drawRect(30, 30, grid_size*cell_size+4, grid_size*cell_size+4)
 
 class CodeGridMenu(QDialog):

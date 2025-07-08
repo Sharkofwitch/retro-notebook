@@ -4,6 +4,7 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 import random, copy, math
 from app.codegrid import show_codegrid
 from app.bit_factory import BitFactory
+from app.tetris import show_tetris
 
 class MinigameMenu(QDialog):
     def __init__(self, parent=None):
@@ -84,11 +85,13 @@ class MinigameMenu(QDialog):
         # Buttons mit animiertem Glow
         btn_codegrid = QPushButton("CodeGrid – Logikpuzzle")
         btn_codegrid.setStyleSheet('font-size:22px; padding:18px; background:#181c1b; color:#33ff66; border:2px solid #33ff66; border-radius:8px;')
-        btn_factory = QPushButton("Bit Factory – Survival Builder")
+        btn_factory = QPushButton("Bit Valley - Retro Farm & City")
         btn_factory.setStyleSheet('font-size:22px; padding:18px; background:#181c1b; color:#ffe066; border:2px solid #ffe066; border-radius:8px;')
+        btn_tetris = QPushButton("Tetris – Retro Klassiker")
+        btn_tetris.setStyleSheet('font-size:22px; padding:18px; background:#181c1b; color:#ff668c; border:2px solid #ff668c; border-radius:8px;')
         help_btn = QPushButton("Was ist das?")
         help_btn.setStyleSheet('font-size:18px; padding:10px; background:#181c1b; color:#ff33cc; border:2px solid #ff33cc; border-radius:8px;')
-        btns = [btn_codegrid, btn_factory, help_btn]
+        btns = [btn_codegrid, btn_factory, btn_tetris, help_btn]
         def btn_flicker(btn, base_color):
             c = QColor(base_color)
             c = c.lighter(random.randint(90,120))
@@ -97,17 +100,20 @@ class MinigameMenu(QDialog):
         def update_btns():
             btn_flicker(btn_codegrid, '#33ff66')
             btn_flicker(btn_factory, '#ffe066')
+            btn_flicker(btn_tetris, '#ff668c')
             btn_flicker(help_btn, '#ff33cc')
         btn_timer.timeout.connect(update_btns)
         btn_timer.start(180)
         retro_layout.addWidget(btn_codegrid)
         retro_layout.addWidget(btn_factory)
+        retro_layout.addWidget(btn_tetris)
         retro_layout.addWidget(help_btn)
         retro_layout.addStretch()
         vbox.addWidget(retro_frame)
         self.setLayout(vbox)
         btn_codegrid.clicked.connect(self.start_codegrid)
         btn_factory.clicked.connect(self.start_factory)
+        btn_tetris.clicked.connect(self.start_tetris)
         help_btn.clicked.connect(self.show_help)
     def start_codegrid(self):
         self.accept()
@@ -116,6 +122,9 @@ class MinigameMenu(QDialog):
         self.accept()
         dlg = BitFactory(self.parent())
         dlg.exec()
+    def start_tetris(self):
+        self.accept()
+        show_tetris(self.parent())
     def show_help(self):
         msg = QDialog(self)
         msg.setWindowTitle("Minispiele – Hilfe")
@@ -129,7 +138,11 @@ class MinigameMenu(QDialog):
             "Baue eine funktionierende Retro-Fabrik auf einem Grid.\n"
             "Platziere Generatoren (Energie), Förderbänder (Transport), Speicher (lagern), Assembler (verarbeiten).\n"
             "Produziere Ressourcen, optimiere deine Fabrik und speichere deinen Fortschritt.\n"
-            "Entspanntes Aufbauspiel ohne Zeitdruck – experimentiere und finde clevere Lösungen!"
+            "Entspanntes Aufbauspiel ohne Zeitdruck – experimentiere und finde clevere Lösungen!<br><br>"
+            "<b>Tetris – Retro Klassiker</b><br>"
+            "Das beliebte Tetris-Spiel im Retro-Stil.\n"
+            "Steuere die fallenden Blöcke, um vollständige Linien zu bilden und Punkte zu sammeln.\n"
+            "Einfach zu lernen, aber schwer zu meistern! Wer erreichte die höchste Punktzahl?"
         )
         l.setWordWrap(True)
         l.setStyleSheet('font-size:18px; color:#ffe066;')

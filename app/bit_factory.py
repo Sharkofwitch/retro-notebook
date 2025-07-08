@@ -1,450 +1,381 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QWidget, QComboBox, QFileDialog, QSizePolicy, QListWidget, QListWidgetItem, QTextBrowser
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QWidget, QComboBox, QListWidget, QListWidgetItem, QTextBrowser, QSizePolicy
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPainter, QColor, QFont
+from PySide6.QtGui import QPainter, QColor, QFont, QPixmap
 from enum import Enum
-from random import randint, choice
-import json, os
+import random, json, os
 
 FACTORY_SAVE_PATH = os.path.join(os.path.dirname(__file__), '../notebooks/bit_factory_save.json')
 
-BELT_DIRECTIONS = ['right', 'down', 'left', 'up']
-BELT_SYMBOLS = {'right': '→', 'down': '↓', 'left': '←', 'up': '↑'}
-BELT_COLORS = {'right': '#33ff66', 'down': '#33ff66', 'left': '#33ff66', 'up': '#33ff66'}
-
-class ModuleType(Enum):
+class TileType(Enum):
     EMPTY = 0
-    GENERATOR = 1  # Erzeugt Energie
-    BELT = 2       # Transportiert
-    STORAGE = 3    # Speichert & verteilt
-    ASSEMBLER = 4  # Wandelt um
-    GARDEN = 5     # Verwandelt überschüssige Energie in Bit-Pflanzen
-    RECYCLER = 6   # Wandelt alte Module in Energie um
+    FIELD = 1
+    PLANT = 2
+    HOUSE = 3
+    FACTORY = 4
+    ROAD = 5
+    NPC = 6
+    WATER = 7
+    TREE = 8
 
 class ResourceType(Enum):
-    ENERGY = "energy"
-    MODULES = "modules"
-    PLANTS = "plants"
-    HARMONY = "harmony"  # Neue "Zen"-Ressource
+    COINS = 'coins'
+    FOOD = 'food'
+    SEEDS = 'seeds'
+    XP = 'xp'
+    ENERGY = 'energy'
+
+class NPC:
+    def __init__(self, name, quest=None):
+        self.name = name
+        self.quest = quest or {}
+        self.x = 0
+        self.y = 0
+        self.active = True
 
 class BitFactory(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Bit Garden – Zen Factory")
+        self.setWindowTitle("Bit Valley – Retro Farm & City")
         self.setStyleSheet("background:#0d0d0d; color:#33ff66; font-family:Courier New,monospace;")
-        self.grid_size = 8
-        self.story_shown = False
-        self.tick_interval = 2000
-        self.paused = False
-        self.harmony_goal = 10  # Ziel für nächsten Level
+        self.grid_size = 12
+        self.tick_interval = 4000  # Noch langsamer
+        self.day = 1
+        self.hour = 6
+        self.is_night = False
+        self.resources = {r.value: 0 for r in ResourceType}
+        self.resources['coins'] = 5
+        self.resources['seeds'] = 1
+        self.resources['food'] = 0
+        self.resources['xp'] = 0
+        self.resources['energy'] = 5
+        self.unlocked = {'FIELD': True, 'PLANT': True, 'HOUSE': False, 'ROAD': False, 'TREE': False, 'WATER': False}
+        self.npcs = []
+        self.tutorial_shown = False
         self.init_game()
         self.init_ui()
-        self.load_factory()
-        self.update_status()
         self.init_timer()
+        self.show_tutorial()
+        self.endless_quest_counter = 0
+        self.max_npcs = 3
+        self.crafting_recipes = {
+            'HOUSE': {'food': 3, 'coins': 10},
+            'ROAD': {'coins': 2},
+            'TREE': {'coins': 1},
+            'WATER': {'coins': 3},
+        }
+
+    def show_tutorial(self):
+        if self.tutorial_shown:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Tutorial – Bit Valley")
+        v = QVBoxLayout()
+        l = QLabel(
+            "<b>Willkommen in Bit Valley!</b><br><br>"
+            "Ziel: Baue eine kleine Farm, sammle Ressourcen und erfülle Quests.<br>"
+            "<ul>"
+            "<li><b>Feld pflanzen:</b> Wähle 'Feld pflanzen', klicke auf ein gelbes Feld.</li>"
+            "<li><b>Ernten:</b> Wähle 'Ernten', klicke auf eine reife Pflanze (grün).</li>"
+            "<li><b>Haus/Straße/Baum/Wasser:</b> Wähle die Aktion, klicke auf ein leeres Feld.</li>"
+            "<li><b>NPCs:</b> Klicke auf '@', um Quests zu sehen und Belohnungen zu erhalten.</li>"
+            "<li><b>Tag beenden:</b> Klick auf 'Tag beenden', um Zeit zu überspringen.</li>"
+            "</ul>"
+            "<b>Tipp:</b> Ressourcen und Aktionen werden oben angezeigt. Alles ist rückgängig machbar – einfach ausprobieren!"
+        )
+        l.setWordWrap(True)
+        l.setStyleSheet('font-size:16px; color:#ffe066;')
+        v.addWidget(l)
+        ok = QPushButton("Los geht's!")
+        ok.clicked.connect(dlg.accept)
+        v.addWidget(ok)
+        dlg.setLayout(v)
+        dlg.exec()
+        self.tutorial_shown = True
+
+    def show_help(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Hilfe & Erklärung – Bit Valley")
+        v = QVBoxLayout()
+        l = QLabel(
+            "<b>Bit Valley – Das entspannte Retro-Aufbauspiel</b><br><br>"
+            "<b>Spielprinzip:</b> Baue Felder, ernte Pflanzen, baue Häuser und erfülle Quests für NPCs.<br>"
+            "<ul>"
+            "<li>Jede Aktion kostet Ressourcen (Coins, Seeds, Energie).</li>"
+            "<li>Pflanzen wachsen über mehrere Ticks (Stufen: . → i → Y → Ψ).</li>"
+            "<li>NPCs geben Aufgaben und Belohnungen.</li>"
+            "<li>Mit XP schaltest du neue Aktionen frei.</li>"
+            "<li>Das Spiel ist rundenbasiert, kein Zeitdruck.</li>"
+            "</ul>"
+            "<b>Steuerung:</b> Aktion wählen, dann auf das Grid klicken.<br>"
+            "<b>Alles ist logisch und einfach gehalten – probiere es aus!</b>"
+        )
+        l.setWordWrap(True)
+        l.setStyleSheet('font-size:16px; color:#33ff66;')
+        v.addWidget(l)
+        ok = QPushButton("Schließen")
+        ok.clicked.connect(dlg.accept)
+        v.addWidget(ok)
+        dlg.setLayout(v)
+        dlg.exec()
+
+    def generate_map(self):
+        # Leere Map
+        self.grid = [[{'type': TileType.EMPTY, 'growth': 0, 'owner': None} for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+        # Ein Startfeld in der Mitte
+        mid = self.grid_size // 2
+        self.grid[mid][mid]['type'] = TileType.FIELD
+        # Start-NPC
+        npc = NPC("Bitty", quest={'goal': 'Ernte 1 Pflanze', 'progress': 0, 'target': 1, 'reward': {'coins': 5, 'seeds': 1, 'unlock': 'HOUSE'}, 'type': 'food'})
+        npc.x, npc.y = mid, mid-1
+        self.npcs = [npc]
+
+    def init_game(self):
+        self.generate_map()
+
+    def init_ui(self):
+        vbox = QVBoxLayout()
+        self.status_label = QLabel()
+        self.status_label.setStyleSheet('font-size:16px; color:#33ff66;')
+        vbox.addWidget(self.status_label)
+        self.grid_widget = BitFactoryGrid(self)
+        vbox.addWidget(self.grid_widget)
+        hbox = QHBoxLayout()
+        self.action_combo = QComboBox()
+        self.action_combo.addItems(["Feld pflanzen", "Ernten", "Haus bauen", "Straße bauen", "Baum pflanzen", "Wasser", "Nichts"])
+        hbox.addWidget(self.action_combo)
+        self.help_btn = QPushButton("Hilfe/Erklärung")
+        self.help_btn.clicked.connect(self.show_help)
+        hbox.addWidget(self.help_btn)
+        self.end_day_btn = QPushButton("Tag beenden")
+        self.end_day_btn.clicked.connect(self.end_day)
+        hbox.addWidget(self.end_day_btn)
+        # Zurück-zum-Menü-Button
+        self.back_btn = QPushButton("Zurück zum Hauptmenü")
+        self.back_btn.setStyleSheet('font-size:16px; background:#222; color:#ffe066; border:2px solid #ffe066; border-radius:8px; padding:6px 18px;')
+        self.back_btn.clicked.connect(self.close)
+        hbox.addWidget(self.back_btn)
+        vbox.addLayout(hbox)
+        self.setLayout(vbox)
+        self.update_status()
 
     def init_timer(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(self.tick_interval)
 
-    def init_game(self):
-        self.grid = [[{
-            'type': ModuleType.EMPTY,
-            'dir': 'right',
-            'energy': 0,
-            'modules': 0,
-            'plants': 0,
-            'active': False
-        } for _ in range(self.grid_size)] for _ in range(self.grid_size)]
-        
-        self.resources = {
-            "energy": 0,
-            "modules": 0,
-            "plants": 0,
-            "harmony": 0  # Now an integer
-        }
-        self.ticks = 0
-        self.level = 1
-        self.selected_module = ModuleType.GENERATOR
-
-    def init_ui(self):
-        vbox = QVBoxLayout()
-        vbox.setContentsMargins(32, 32, 32, 32)
-        # Statuszeile
-        status_row = QHBoxLayout()
-        self.status_label = QLabel()
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.status_label.setStyleSheet('font-size:18px; color:#33ff66;')
-        status_row.addWidget(self.status_label)
-        self.pause_btn = QPushButton("Pause")
-        self.pause_btn.setStyleSheet('font-size:16px; background:#222; color:#33ff66; border:2px solid #33ff66; border-radius:8px; padding:6px 18px;')
-        self.pause_btn.clicked.connect(self.toggle_pause)
-        status_row.addWidget(self.pause_btn)
-        self.tick_btn = QPushButton("+1 Tick")
-        self.tick_btn.setStyleSheet('font-size:16px; background:#222; color:#33ff66; border:2px solid #33ff66; border-radius:8px; padding:6px 18px;')
-        self.tick_btn.clicked.connect(self.manual_tick)
-        status_row.addWidget(self.tick_btn)
-        vbox.addLayout(status_row)
-        # Story/Hilfe-Button
-        self.story_label = QLabel()
-        self.story_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.story_label.setStyleSheet('font-size:16px; color:#ffe066; margin:8px;')
-        vbox.addWidget(self.story_label)
-        # Grid
-        self.grid_widget = BitFactoryGrid(self)
-        vbox.addWidget(self.grid_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
-        # Modulauswahl
-        hbox = QHBoxLayout()
-        self.module_combo = QComboBox()
-        self.module_combo.addItems(["Generator", "Förderband", "Speicher", "Assembler", "Entfernen"])
-        self.module_combo.setStyleSheet('font-size:18px; background:#111; color:#33ff66; border:2px solid #33ff66; border-radius:6px; min-width:120px;')
-        self.module_combo.currentTextChanged.connect(self.select_module)
-        hbox.addWidget(QLabel("Modul:"))
-        hbox.addWidget(self.module_combo)
-        self.save_btn = QPushButton("Speichern")
-        self.save_btn.setStyleSheet('font-size:16px; background:#222; color:#33ff66; border:2px solid #33ff66; border-radius:8px; padding:6px 18px;')
-        self.save_btn.clicked.connect(self.save_factory)
-        hbox.addWidget(self.save_btn)
-        self.load_btn = QPushButton("Laden")
-        self.load_btn.setStyleSheet('font-size:16px; background:#222; color:#33ff66; border:2px solid #33ff66; border-radius:8px; padding:6px 18px;')
-        self.load_btn.clicked.connect(self.load_factory)
-        hbox.addWidget(self.load_btn)
-        self.help_btn = QPushButton("Hilfe/Story")
-        self.help_btn.setStyleSheet('font-size:16px; background:#222; color:#ffe066; border:2px solid #ffe066; border-radius:8px; padding:6px 18px;')
-        self.help_btn.clicked.connect(self.show_story)
-        hbox.addWidget(self.help_btn)
-        vbox.addLayout(hbox)
-        self.setLayout(vbox)
-
-    def toggle_pause(self):
-        self.paused = not self.paused
-        if self.paused:
-            self.timer.stop()
-            self.pause_btn.setText("Fortsetzen")
-        else:
-            self.timer.start(self.tick_interval)
-            self.pause_btn.setText("Pause")
-
-    def manual_tick(self):
-        self.tick()
-
-    def select_module(self, name):
-        if name == "Generator":
-            self.selected_module = ModuleType.GENERATOR
-        elif name == "Förderband":
-            self.selected_module = ModuleType.BELT
-        elif name == "Speicher":
-            self.selected_module = ModuleType.STORAGE
-        elif name == "Assembler":
-            self.selected_module = ModuleType.ASSEMBLER
-        else:
-            self.selected_module = ModuleType.EMPTY
-
     def tick(self):
-        if self.paused:
-            return
-
-        # Phase 1: Generator-Produktion
-        for y in range(self.grid_size):
-            for x in range(self.grid_size):
-                cell = self.grid[y][x]
-                if cell['type'] == ModuleType.GENERATOR:
-                    cell['energy'] = min(cell['energy'] + 1, 5)  # Max 5 Energie pro Generator
-                    cell['active'] = True
-
-        # Phase 2: Transport (Förderbänder)
-        self.process_belts()
-
-        # Phase 3: Verarbeitung
-        for y in range(self.grid_size):
-            for x in range(self.grid_size):
-                cell = self.grid[y][x]
-                
-                if cell['type'] == ModuleType.STORAGE:
-                    # Speicher verteilt Energie gleichmäßig
-                    if cell['energy'] > 0:
-                        self.distribute_energy(x, y)
-                        cell['active'] = True
-                
-                elif cell['type'] == ModuleType.ASSEMBLER:
-                    # Assembler wandelt Energie in Module um
-                    if cell['energy'] >= 2:
-                        cell['energy'] -= 2
-                        cell['modules'] += 1
-                        cell['active'] = True
-                
-                elif cell['type'] == ModuleType.GARDEN:
-                    # Garten wandelt überschüssige Energie in Pflanzen
-                    if cell['energy'] >= 3:
-                        cell['energy'] -= 3
-                        cell['plants'] += 1
-                        self.resources['harmony'] += 0.1
-                        cell['active'] = True
-                
-                elif cell['type'] == ModuleType.RECYCLER:
-                    # Recycler wandelt alte Module zurück in Energie
-                    if cell['modules'] >= 1:
-                        cell['modules'] -= 1
-                        cell['energy'] += 3
-                        cell['active'] = True
-
-        # Phase 4: Ressourcen sammeln und Harmonie berechnen
-        self.collect_resources()
-        self.check_harmony()
-        
-        self.ticks += 1
-        self.update_status()
-        
-        # Visuelles Feedback zurücksetzen
-        for y in range(self.grid_size):
-            for x in range(self.grid_size):
-                self.grid[y][x]['active'] = False
-
-    def process_belts(self):
-        # Förderbänder transportieren Ressourcen in ihre Richtung
-        moved = True
-        while moved:  # Mehrere Durchgänge, bis nichts mehr bewegt wird
-            moved = False
+        self.hour += 1
+        if self.hour == 18:
+            self.is_night = True
+        if self.hour == 6:
+            self.is_night = False
+        if self.hour >= 24:
+            self.hour = 6
+            self.day += 1
+            self.resources['energy'] = min(self.resources['energy'] + 3, 10)
+            if len(self.npcs) < self.max_npcs:
+                self.spawn_npc()
+        # Pflanzen wachsen nur am Tag
+        if not self.is_night:
             for y in range(self.grid_size):
                 for x in range(self.grid_size):
                     cell = self.grid[y][x]
-                    if cell['type'] == ModuleType.BELT and (cell['energy'] > 0 or cell['modules'] > 0):
-                        next_x, next_y = self.get_next_position(x, y, cell['dir'])
-                        if self.is_valid_position(next_x, next_y):
-                            target = self.grid[next_y][next_x]
-                            if self.can_accept_resources(target):
-                                self.move_resources(cell, target)
-                                moved = True
-                                cell['active'] = True
-
-    def distribute_energy(self, x, y):
-        # Speicher verteilt Energie an benachbarte Module
-        directions = [(0,1), (1,0), (0,-1), (-1,0)]
-        neighbors = []
-        
-        for dx, dy in directions:
-            nx, ny = x + dx, y + dy
-            if self.is_valid_position(nx, ny):
-                target = self.grid[ny][nx]
-                if target['type'] in [ModuleType.ASSEMBLER, ModuleType.GARDEN]:
-                    neighbors.append(target)
-        
-        if neighbors:
-            energy_per_neighbor = min(1, self.grid[y][x]['energy'] / len(neighbors))
-            for neighbor in neighbors:
-                if energy_per_neighbor >= 1:
-                    self.grid[y][x]['energy'] -= 1
-                    neighbor['energy'] += 1
-
-    def check_harmony(self):
-        # Prüfe, ob genug Harmonie für den nächsten Level erreicht wurde
-        if self.resources['harmony'] >= self.harmony_goal:
-            self.level_up()
-
-    def level_up(self):
-        # Level aufsteigen, neue Ziele setzen
-        self.level += 1
-        self.harmony_goal *= 1.5
-        self.show_level_up_message()
-
-    def show_level_up_message(self):
-        msg = QDialog(self)
-        msg.setWindowTitle("Level Up!")
-        msg.setStyleSheet(self.styleSheet())
-        layout = QVBoxLayout()
-        text = f"""
-        <div style='text-align:center;'>
-        <h2 style='color:#ffe066;'>Level {self.level} erreicht!</h2>
-        <p>Deine Bit-Fabrik wächst in Harmonie.</p>
-        <p>Neues Ziel: {self.harmony_goal:.1f} Harmonie</p>
-        </div>
-        """
-        label = QLabel(text)
-        layout.addWidget(label)
-        ok_btn = QPushButton("Weiter")
-        ok_btn.clicked.connect(msg.accept)
-        layout.addWidget(ok_btn)
-        msg.setLayout(layout)
-        msg.exec()
-
-    def update_status(self):
-        self.status_label.setText(
-            f"Level: {self.level} | "
-            f"Harmonie: {self.resources['harmony']:.1f}/{self.harmony_goal:.1f} | "
-            f"Energie: {self.resources['energy']} | "
-            f"Module: {self.resources['modules']} | "
-            f"Pflanzen: {self.resources['plants']}"
-        )
+                    if cell['type'] == TileType.PLANT and cell['growth'] < 3:
+                        cell['growth'] += 1
+        # Quests prüfen und Fortschritt updaten
+        for npc in self.npcs:
+            if npc.active and 'type' in npc.quest:
+                if npc.quest['type'] == 'food':
+                    npc.quest['progress'] = self.resources['food']
+                elif npc.quest['type'] == 'fields':
+                    npc.quest['progress'] = sum(1 for row in self.grid for c in row if c['type'] == TileType.FIELD)
+                elif npc.quest['type'] == 'trees':
+                    npc.quest['progress'] = sum(1 for row in self.grid for c in row if c['type'] == TileType.TREE)
+        self.update_status()
         self.grid_widget.update()
 
-    def show_story(self):
-        dlg = BitFactoryHelp(self)
-        dlg.exec()
+    def spawn_npc(self):
+        # Endlos generierte Quests
+        self.endless_quest_counter += 1
+        quest_types = [
+            ('Ernte', 'food', random.randint(2, 6), {'coins': random.randint(5, 15), 'xp': random.randint(2, 8)}),
+            ('Baue Felder', 'fields', random.randint(2, 5), {'coins': random.randint(4, 10), 'xp': random.randint(2, 6)}),
+            ('Pflanze Bäume', 'trees', random.randint(1, 4), {'coins': random.randint(3, 8), 'xp': random.randint(1, 5)})
+        ]
+        q = random.choice(quest_types)
+        quest = {'goal': f'{q[0]} {q[2]}', 'progress': 0, 'target': q[2], 'reward': q[3], 'type': q[1]}
+        npc = NPC(f"Bitty-{self.endless_quest_counter}", quest=quest)
+        # Zufällige freie Position
+        while True:
+            x, y = random.randint(0, self.grid_size-1), random.randint(0, self.grid_size-1)
+            if self.grid[y][x]['type'] == TileType.EMPTY:
+                npc.x, npc.y = x, y
+                break
+        self.npcs.append(npc)
 
-    def mousePressEvent(self, event):
-        self.story_label.setText("")
-        self.story_shown = False
-
-    def save_factory(self):
-        data = {
-            "grid": self.grid,
-            "resources": self.resources,
-            "ticks": self.ticks
-        }
-        with open(FACTORY_SAVE_PATH, 'w') as f:
-            json.dump(data, f)
-        self.story_label.setText("Fabrik gespeichert!")
-
-    def load_factory(self):
-        if os.path.exists(FACTORY_SAVE_PATH):
-            with open(FACTORY_SAVE_PATH, 'r') as f:
-                data = json.load(f)
-            loaded_grid = data.get("grid", self.grid)
-            # Ensure all cells are valid dicts with required fields
-            for y in range(self.grid_size):
-                for x in range(self.grid_size):
-                    cell = None
-                    try:
-                        cell = loaded_grid[y][x]
-                    except Exception:
-                        pass
-                    if not isinstance(cell, dict):
-                        # Replace None or invalid with default
-                        loaded_grid[y][x] = {
-                            'type': ModuleType.EMPTY,
-                            'dir': 'right',
-                            'energy': 0,
-                            'modules': 0,
-                            'plants': 0,
-                            'active': False
-                        }
-                    else:
-                        # Ensure all required fields exist
-                        for k, v in {
-                            'type': ModuleType.EMPTY,
-                            'dir': 'right',
-                            'energy': 0,
-                            'modules': 0,
-                            'plants': 0,
-                            'active': False
-                        }.items():
-                            if k not in loaded_grid[y][x]:
-                                loaded_grid[y][x][k] = v
-                        # Convert 'type' from int/string to ModuleType if needed
-                        if not isinstance(loaded_grid[y][x]['type'], ModuleType):
-                            try:
-                                loaded_grid[y][x]['type'] = ModuleType(loaded_grid[y][x]['type'])
-                            except Exception:
-                                loaded_grid[y][x]['type'] = ModuleType.EMPTY
-            self.grid = loaded_grid
-            self.resources = data.get("resources", self.resources)
-            self.ticks = data.get("ticks", 0)
-            # Fehlende Felder ergänzen (z.B. harmony)
-            if 'harmony' not in self.resources:
-                self.resources['harmony'] = 0
-            if 'plants' not in self.resources:
-                self.resources['plants'] = 0
-            self.story_label.setText("Fabrik geladen!")
-        else:
-            self.story_label.setText("")
+    def end_day(self):
+        self.hour = 6
+        self.day += 1
+        self.resources['energy'] = min(self.resources['energy'] + 5, 20)
         self.update_status()
+        self.grid_widget.update()
 
-    def is_valid_position(self, x, y):
-        return 0 <= x < self.grid_size and 0 <= y < self.grid_size
+    def update_status(self):
+        self.status_label.setText(f"Tag: {self.day} | Uhrzeit: {self.hour}:00 | Coins: {self.resources['coins']} | Seeds: {self.resources['seeds']} | Food: {self.resources['food']} | XP: {self.resources['xp']} | Energy: {self.resources['energy']}")
 
-    def can_accept_resources(self, cell):
-        return (cell['type'] != ModuleType.GENERATOR and 
-                cell['type'] != ModuleType.EMPTY and
-                cell['energy'] < 5)  # Max 5 Energie pro Zelle
+    def unlock(self, name):
+        self.unlocked[name] = True
+        self.update_status()
+        self.grid_widget.update()
 
-    def move_resources(self, source, target):
-        # Bewegt Ressourcen von einer Zelle zur anderen
-        if source['energy'] > 0 and target['energy'] < 5:
-            target['energy'] += 1
-            source['energy'] -= 1
-        if source['modules'] > 0:
-            target['modules'] += 1
-            source['modules'] -= 1
-
-    def collect_resources(self):
-        # Sammelt Ressourcen aus allen Zellen
-        total_energy = 0
-        total_modules = 0
-        total_plants = 0
-        
-        for y in range(self.grid_size):
-            for x in range(self.grid_size):
-                cell = self.grid[y][x]
-                total_energy += cell['energy']
-                total_modules += cell['modules']
-                total_plants += cell['plants']
-                
-        self.resources['energy'] = total_energy
-        self.resources['modules'] = total_modules
-        self.resources['plants'] = total_plants
-
-    def get_next_position(self, x, y, direction):
-        if direction == 'right':
-            return x + 1, y
-        elif direction == 'down':
-            return x, y + 1
-        elif direction == 'left':
-            return x - 1, y
-        else:  # up
-            return x, y - 1
+    def interact_npc(self, npc):
+        msg = QDialog(self)
+        msg.setWindowTitle(f"NPC: {npc.name}")
+        v = QVBoxLayout()
+        l = QLabel(f"Quest: {npc.quest['goal']}<br>Fortschritt: {npc.quest['progress']}/{npc.quest['target']}")
+        l.setStyleSheet('font-size:16px; color:#ffe066;')
+        v.addWidget(l)
+        if npc.quest['progress'] >= npc.quest['target']:
+            btn = QPushButton("Belohnung abholen!")
+            def claim():
+                for k, v_ in npc.quest['reward'].items():
+                    if k == 'unlock':
+                        self.unlock(v_)
+                    else:
+                        self.resources[k] += v_
+                npc.active = False
+                msg.accept()
+                self.update_status()
+            btn.clicked.connect(claim)
+            v.addWidget(btn)
+        # Crafting-Button
+        if self.unlocked.get('HOUSE') and not self.unlocked.get('ROAD'):
+            craft_btn = QPushButton("Straße freischalten (2 Coins)")
+            def craft():
+                if self.resources['coins'] >= 2:
+                    self.resources['coins'] -= 2
+                    self.unlock('ROAD')
+                    msg.accept()
+                    self.update_status()
+            craft_btn.clicked.connect(craft)
+            v.addWidget(craft_btn)
+        ok = QPushButton("OK")
+        ok.clicked.connect(msg.accept)
+        v.addWidget(ok)
+        msg.setLayout(v)
+        msg.exec()
 
 class BitFactoryGrid(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.game = parent
-        self.setMinimumSize(400, 400)
+    def __init__(self, game):
+        super().__init__(game)
+        self.game = game
+        self.setMinimumSize(600, 600)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-    def mousePressEvent(self, event):
-        cell_size = self.width() // self.game.grid_size
-        x = event.x() // cell_size
-        y = event.y() // cell_size
-        if 0 <= x < self.game.grid_size and 0 <= y < self.game.grid_size:
-            cell = self.game.grid[y][x]
-            if self.game.selected_module == ModuleType.BELT:
-                # Drehe Richtung, wenn bereits Belt
-                if cell['type'] == ModuleType.BELT:
-                    idx = BELT_DIRECTIONS.index(cell['dir'])
-                    cell['dir'] = BELT_DIRECTIONS[(idx+1)%4]
-                else:
-                    cell['type'] = ModuleType.BELT
-                    cell['dir'] = self.game.selected_belt_dir
-            elif self.game.selected_module == ModuleType.EMPTY:
-                cell['type'] = ModuleType.EMPTY
-            else:
-                cell['type'] = self.game.selected_module
-            self.game.update_status()
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAutoFillBackground(False)
+        self.setUpdatesEnabled(True)
+        # Unicode/ASCII Icons als Fallback
+        self.ascii_icons = {
+            'FIELD': '▦',
+            'PLANT0': '.',
+            'PLANT1': 'i',
+            'PLANT2': 'Y',
+            'PLANT3': 'Ψ',
+            'HOUSE': '⌂',
+            'ROAD': '=',
+            'TREE': '♣',
+            'WATER': '~',
+            'NPC': '@',
+        }
+
     def paintEvent(self, event):
+        self.setUpdatesEnabled(False)
         qp = QPainter(self)
         grid_size = self.game.grid_size
         w = self.width() // grid_size
         h = self.height() // grid_size
+        # Tag/Nacht-Visualisierung
+        if self.game.is_night:
+            qp.fillRect(0, 0, self.width(), self.height(), QColor(10, 10, 30, 220))
         for y in range(grid_size):
             for x in range(grid_size):
                 cell = self.game.grid[y][x]
-                mtype = cell['type']
-                if mtype == ModuleType.GENERATOR:
-                    qp.setPen(QColor('#ffe066'))
-                    qp.setFont(QFont('Courier New', 24, QFont.Weight.Bold))
-                    qp.drawText(x*w+8, y*h+32, '⚡')
-                elif mtype == ModuleType.BELT:
-                    qp.setPen(QColor(BELT_COLORS[cell['dir']]))
-                    qp.setFont(QFont('Courier New', 24, QFont.Weight.Bold))
-                    qp.drawText(x*w+8, y*h+32, BELT_SYMBOLS[cell['dir']])
-                elif mtype == ModuleType.STORAGE:
-                    qp.setPen(QColor('#66ccff'))
-                    qp.setFont(QFont('Courier New', 24, QFont.Weight.Bold))
-                    qp.drawText(x*w+8, y*h+32, '□')
-                elif mtype == ModuleType.ASSEMBLER:
-                    qp.setPen(QColor('#ff3366'))
-                    qp.setFont(QFont('Courier New', 24, QFont.Weight.Bold))
-                    qp.drawText(x*w+8, y*h+32, '✚')
-                qp.setPen(QColor('#444'))
+                t = cell['type']
+                qp.setPen(QColor('#222'))
+                qp.setBrush(QColor('#0d0d0d'))
                 qp.drawRect(x*w, y*h, w, h)
+                # Unicode/ASCII-Icons zeichnen
+                if t == TileType.FIELD:
+                    qp.setPen(QColor('#ffe066'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons['FIELD'])
+                elif t == TileType.PLANT:
+                    g = cell.get('growth', 0)
+                    qp.setPen(QColor('#33ff66'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons[f'PLANT{min(g,3)}'])
+                elif t == TileType.HOUSE:
+                    qp.setPen(QColor('#66ccff'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons['HOUSE'])
+                elif t == TileType.ROAD:
+                    qp.setPen(QColor('#888'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons['ROAD'])
+                elif t == TileType.TREE:
+                    qp.setPen(QColor('#00ff99'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons['TREE'])
+                elif t == TileType.WATER:
+                    qp.setPen(QColor('#3399ff'))
+                    qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                    qp.drawText(x*w+w//4, y*h+int(h*0.75), self.ascii_icons['WATER'])
+        # NPCs
+        for npc in self.game.npcs:
+            if npc.active:
+                qp.setPen(QColor('#ff33cc'))
+                qp.setFont(QFont('Courier New', int(h*0.7), QFont.Weight.Bold))
+                qp.drawText(npc.x*w+w//4, npc.y*h+int(h*0.75), self.ascii_icons['NPC'])
+        qp.end()
+        self.setUpdatesEnabled(True)
+
+    def mousePressEvent(self, event):
+        grid_size = self.game.grid_size
+        w = self.width() // grid_size
+        h = self.height() // grid_size
+        x = event.x() // w
+        y = event.y() // h
+        if 0 <= x < grid_size and 0 <= y < grid_size:
+            action = self.game.action_combo.currentText()
+            cell = self.game.grid[y][x]
+            # Nur erlaubte Aktionen
+            if action == "Feld pflanzen" and self.game.unlocked['FIELD'] and self.game.resources['seeds'] > 0 and cell['type'] == TileType.FIELD:
+                cell['type'] = TileType.PLANT
+                cell['growth'] = 0
+                self.game.resources['seeds'] -= 1
+            elif action == "Ernten" and cell['type'] == TileType.PLANT and cell['growth'] >= 3:
+                cell['type'] = TileType.FIELD
+                cell['growth'] = 0
+                self.game.resources['food'] += 1
+            elif action == "Straße bauen" and self.game.unlocked['ROAD'] and self.game.resources['coins'] >= 2 and cell['type'] == TileType.EMPTY:
+                cell['type'] = TileType.ROAD
+                self.game.resources['coins'] -= 2
+            elif action == "Haus bauen" and self.game.unlocked['HOUSE'] and self.game.resources['food'] >= 3 and self.game.resources['coins'] >= 10 and cell['type'] == TileType.EMPTY:
+                cell['type'] = TileType.HOUSE
+                self.game.resources['food'] -= 3
+                self.game.resources['coins'] -= 10
+            elif action == "Baum pflanzen" and self.game.unlocked['TREE'] and self.game.resources['coins'] >= 1 and cell['type'] == TileType.EMPTY:
+                cell['type'] = TileType.TREE
+                self.game.resources['coins'] -= 1
+            elif action == "Wasser" and self.game.unlocked['WATER'] and self.game.resources['coins'] >= 3 and cell['type'] == TileType.EMPTY:
+                cell['type'] = TileType.WATER
+                self.game.resources['coins'] -= 3
+            self.game.update_status()
+            self.update()
+        # NPC-Interaktion
+        for npc in self.game.npcs:
+            if npc.active and npc.x == x and npc.y == y:
+                self.game.interact_npc(npc)
 
 class BitFactoryHelp(QDialog):
     def __init__(self, parent=None):
