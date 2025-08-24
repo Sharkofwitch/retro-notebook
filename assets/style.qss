@@ -18,19 +18,35 @@ QTextEdit, QLineEdit {
 QPushButton {
     background-color: #262626;
     border: 2px solid #33ff66;
-    padding: 8px 16px;
+    padding: 6px 12px;
     color: #33ff66;
     font-family: 'Courier New', monospace;
-    font-size: 18px;
-    border-radius: 4px;
+    font-size: 14px;
+    border-radius: 6px;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    transition: all 140ms ease-in-out;
 }
 
+/* hover/flicker: subtly change color and add glow */
 QPushButton:hover {
-    background-color: #333333;
+    background-color: #2d2d2d;
     color: #00ff99;
     border: 2px solid #00ff99;
+    box-shadow: 0 0 10px rgba(0,255,153,0.08);
+}
+
+/* active or pressed state */
+QPushButton:pressed {
+    transform: translateY(1px);
+    box-shadow: 0 0 6px rgba(0,255,153,0.06) inset;
+}
+
+/* small glyph buttons (toolbar) */
+QPushButton[small="true"] {
+    padding: 4px 6px;
+    font-size: 13px;
+    min-width: 26px;
 }
 
 QLabel {
